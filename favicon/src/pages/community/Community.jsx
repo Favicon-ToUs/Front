@@ -267,120 +267,84 @@ function Community() {
               </div>
               <div onClick={() => openModal(post)} className={`post-body ${post.thumbnailImageId ? 'with-image' : 'without-image'}`}>
                 <p>{post.content}</p>
-                {post.thumbnailImageId && <img src={extractUrl(post.thumbnailImageId)} alt={post.title} />}
+                {post.thumbnailImageId && <img src={post.thumbnailImageId} alt="Post Thumbnail" className="post-thumbnail" />}
               </div>
-              <div className="post-footer">
-                <div className="post-stats">
-                  <span><FaRegComment /> {post.commentsCount}</span>
-                  <span><FaRegThumbsUp /> {post.likesCount}</span>
-                </div>
-                <div className="post-actions">
-                  <button onClick={() => handleLike(post)}><FaHeart /> {post.liked ? 'Unlike' : 'Like'}</button>
-                  <button onClick={() => openModal(post)}><FaRegComment /> Comment</button>
-                  <button><FaShareSquare /> Share</button>
-                </div>
+              <div className="post-actions">
+                <button className="like-button" onClick={() => handleLike(post)}>
+                  {post.liked ? <FaHeart className={`heart-icon${showHeart ? ' animate-heart' : ''}`} /> : <FaRegThumbsUp />}
+                  <span>{post.likesCount}</span>
+                </button>
+                <button className="comment-button" onClick={() => openModal(post)}>
+                  <FaRegComment />
+                  <span>{post.commentsCount}</span>
+                </button>
+                <button className="share-button">
+                  <FaShareSquare />
+                </button>
               </div>
-              {showHeart && <FaHeart className="heart-animation" />} 
-              {showUnlikeHeart && <FaHeart className="unlike-heart-animation" />} 
             </div>
           </div>
         ))}
       </div>
 
-      {selectedPost && (
-        <Modal
-          isOpen={modalIsOpen}
-          onRequestClose={closeModal}
-          contentLabel="Add Comment"
-          className="modal"
-          overlayClassName="overlay"
-        >
-          <div className="modal-card">
-            <div className="modal-header">
-              <div className="profile-info">
-                <img src={`${process.env.PUBLIC_URL}/profile.png`} alt="Profile" className="profile-image" />
-                <h3>{selectedPost.userId}</h3>
-              </div>
-              <button className="close-button" onClick={closeModal}><FaTimes /></button>
-            </div>
-            <div className={`post-body ${selectedPost.thumbnailImageId ? 'with-image' : 'without-image'}`}>
+      <Modal isOpen={modalIsOpen} onRequestClose={closeModal} className="post-modal">
+        <div className="modal-content">
+          <button onClick={closeModal} className="close-modal-button">
+            <FaTimes />
+          </button>
+          {selectedPost && (
+            <>
+              <h2>{selectedPost.title}</h2>
               <p>{selectedPost.content}</p>
-              {selectedPost.thumbnailImageId && <img src={extractUrl(selectedPost.thumbnailImageId)} alt={selectedPost.title} />}
-            </div>
-            <div className="post-footer">
-              <div className="post-stats">
-                <span><FaRegComment /> {comments.length}</span>
-                <span><FaHeart /> {selectedPost.likesCount}</span>
-              </div>
               <div className="post-actions">
-                <button onClick={() => handleLike(selectedPost)}><FaHeart /> {selectedPost.liked ? 'Unlike' : 'Like'}</button>
-                <button><FaRegComment /> Comment</button>
-                <button><FaShareSquare /> Share</button>
+                <button className="like-button" onClick={() => handleLike(selectedPost)}>
+                  {selectedPost.liked ? <FaHeart className={`heart-icon${showHeart ? ' animate-heart' : ''}`} /> : <FaRegThumbsUp />}
+                  <span>{selectedPost.likesCount}</span>
+                </button>
               </div>
-            </div>
-            <div className="comments-section">
-              <div className="comments-list">
-                {comments.map(comment => (
-                  <div key={comment.commentId} className="comment-item">
+              <div className="comments-section">
+                {comments.map((comment, index) => (
+                  <div key={index} className="comment">
                     <p>{comment.content}</p>
                   </div>
                 ))}
+                <textarea
+                  value={commentContent}
+                  onChange={(e) => setCommentContent(e.target.value)}
+                  onKeyPress={handleKeyPress}
+                  placeholder="Add a comment..."
+                />
+                <button onClick={handleAddComment} className="add-comment-button">
+                  Add Comment
+                </button>
               </div>
-            </div>
-            <textarea
-              value={commentContent}
-              onChange={(e) => setCommentContent(e.target.value)}
-              onKeyPress={handleKeyPress}
-              placeholder="Add a comment"
-            />
-          </div>
-        </Modal>
-      )}
-
-      <Modal
-        isOpen={isCreatePostModalOpen}
-        onRequestClose={closeCreatePostModal}
-        contentLabel="Create Post"
-        className="modal"
-        overlayClassName="overlay"
-      >
-        <div className="modal-card">
-          <div className="modal-header">
-            <h3>Create New Post</h3>
-            <button className="close-button" onClick={closeCreatePostModal}><FaTimes /></button>
-          </div>
-          <div className="modal-body">
-            <input
-              type="text"
-              placeholder="Title"
-              value={newPostTitle}
-              onChange={(e) => setNewPostTitle(e.target.value)}
-              className="create-post-title"
-            />
-            <textarea
-              placeholder="Content"
-              value={newPostContent}
-              onChange={handleContentChange}
-              className="create-post-content"
-            />
-            <div className="character-count">
-              {newPostContent.length}/{MAX_CONTENT_LENGTH}
-            </div>
-            <input
-              type="file"
-              onChange={handleImageChange}
-              className="create-post-image"
-            />
-            {newPostImage && (
-              <div className="selected-image">
-                <span>{newPostImage.name}</span>
-              </div>
-            )}
-          </div>
-          <div className="modal-footer">
-            <button onClick={handleCreatePost} className="create-post-button">Create</button>
-          </div>
+            </>
+          )}
         </div>
+      </Modal>
+
+      <Modal isOpen={isCreatePostModalOpen} onRequestClose={closeCreatePostModal} className="create-post-modal">
+        <h2>Create New Post</h2>
+        <input
+          type="text"
+          value={newPostTitle}
+          onChange={(e) => setNewPostTitle(e.target.value)}
+          placeholder="Post Title"
+          className="post-title-input"
+        />
+        <textarea
+          value={newPostContent}
+          onChange={handleContentChange}
+          placeholder="Write your post..."
+          className="post-content-input"
+        />
+        <input type="file" onChange={handleImageChange} className="image-upload-input" />
+        <button onClick={handleCreatePost} className="create-post-button">
+          Create Post
+        </button>
+        <button onClick={closeCreatePostModal} className="close-modal-button">
+          Cancel
+        </button>
       </Modal>
     </div>
   );
