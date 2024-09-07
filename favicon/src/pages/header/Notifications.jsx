@@ -2,39 +2,75 @@ import React, { useEffect, useState, useRef } from "react";
 import Cookies from "js-cookie";
 import { FaBell } from "react-icons/fa";
 import NotificationList from "./NotificationList";
+import { useNavigate } from "react-router-dom";
 
 const Notifications = () => {
   const [notifications, setNotifications] = useState([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const notificationRef = useRef(null);
+  const navigate = useNavigate();
+
+  const handleLogout = async () => {
+    try {
+      const accessToken = Cookies.get("access");
+
+      const response = await fetch(`${process.env.REACT_APP_API_BASE_URL}/users/logout`, {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`
+        }
+      });
+
+      if (response.ok) {
+        Cookies.remove("access");
+        Cookies.remove("refresh");
+        Cookies.remove("userEmail");
+        navigate("/login");
+      } else {
+        console.error("Failed to logout");
+      }
+    } catch (error) {
+      console.error("Failed to logout", error);
+    }
+  };
 
   useEffect(() => {
-    const accessToken = Cookies.get("access");
+    const fetchNotifications = async () => {
+      const accessToken = Cookies.get("access");
 
-    if (accessToken) {
-      const intervalId = setInterval(async () => {
-        try {
-          const response = await fetch(`${process.env.REACT_APP_API_BASE_URL}/users/alarm`, {
-            method: 'GET',
-            headers: {
-              'Authorization': `Bearer ${accessToken}`,
-            },
-          });
+      if (!accessToken) return;
 
-          if (response.ok) {
-            const data = await response.json();
-            console.log(data); // 데이터 구조 확인
-            setNotifications(data);
-          } else {
-            console.error("Failed to fetch notifications");
-          }
-        } catch (error) {
-          console.error("Failed to fetch notifications", error);
+      try {
+        const response = await fetch(`${process.env.REACT_APP_API_BASE_URL}/users/alarm`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+          },
+        });
+
+        if (response.status === 401) {
+          // Access Token 만료: 로그아웃 로직 추가
+          handleLogout();
+          return;
         }
-      }, 5000); // 5초마다 폴링
 
-      return () => clearInterval(intervalId);
-    }
+        if (response.ok) {
+          const data = await response.json();
+          console.log(data); // 데이터 구조 확인
+          setNotifications(data);
+        } else {
+          console.error("Failed to fetch notifications");
+        }
+      } catch (error) {
+        console.error("Failed to fetch notifications", error);
+      }
+    };
+
+    fetchNotifications();
+    const intervalId = setInterval(fetchNotifications, 5000); // 5초마다 폴링
+
+    return () => clearInterval(intervalId);
   }, []);
 
   useEffect(() => {
