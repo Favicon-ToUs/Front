@@ -1,77 +1,91 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import Cookies from "js-cookie";
 import { FaBell } from "react-icons/fa";
 import NotificationList from "./NotificationList";
-import { useNavigate } from "react-router-dom";
+import { EventSourcePolyfill } from "event-source-polyfill";  // EventSource-Polyfill import
 
 const Notifications = () => {
   const [notifications, setNotifications] = useState([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const notificationRef = useRef(null);
-  const navigate = useNavigate();
+  const eventSourceRef = useRef(null);  // SSE 연결을 관리하기 위한 ref
 
-  const handleLogout = async () => {
-    try {
-      const accessToken = Cookies.get("access");
-
-      const response = await fetch(`${process.env.REACT_APP_API_BASE_URL}/users/logout`, {
-        method: 'GET',
-        credentials: 'include',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`
-        }
-      });
-
-      if (response.ok) {
-        Cookies.remove("access");
-        Cookies.remove("refresh");
-        Cookies.remove("userEmail");
-        navigate("/login");
-      } else {
-        console.error("Failed to logout");
-      }
-    } catch (error) {
-      console.error("Failed to logout", error);
+  const connectSSE = useCallback(() => {
+    const accessToken = Cookies.get("access");
+  
+    if (!accessToken) return;
+  
+    if (eventSourceRef.current) {
+      console.log("SSE already connected.");
+      return; // 이미 연결된 경우 새로운 연결을 생성하지 않음
     }
-  };
+  
+    const eventSource = new EventSourcePolyfill(
+      `${process.env.REACT_APP_API_BASE_URL}/users/alarm/subscribe`,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+        withCredentials: true, // 클라이언트가 자격 증명을 포함한 요청을 보내도록 설정
+      }
+    );
+  
+    eventSource.onopen = () => {
+      console.log("SSE connection established.");
+    };
+  
+    let retryCount = 0;  // 재연결 시도 횟수 추적
+  
+    eventSource.onerror = (error) => {
+      console.error("SSE connection error:", error);
+  
+      if (eventSource.readyState === EventSource.CLOSED) {
+        console.log("SSE connection was closed.");
+      } else {
+        console.log("SSE connection error, readyState:", eventSource.readyState);
+      }
+  
+      eventSource.close();  // 기존 연결 닫기
+  
+      // 지수 백오프 알고리즘 사용하여 재연결 지연 시간 증가
+      const retryTimeout = Math.min(1000 * Math.pow(2, retryCount), 30000);  // 최대 30초
+      retryCount++;
+  
+      setTimeout(() => {
+        console.log("Reconnecting SSE...");
+        connectSSE();  // 재연결 함수 호출
+      }, retryTimeout);  // 백오프 시간 후 재연결 시도
+    };
+  
+    eventSource.onmessage = (event) => {
+      if (event.data === "keep-alive") {
+        console.log("Heartbeat received.");
+        return; // heartbeat 이벤트인 경우 처리하지 않음
+      }
+    
+      console.log("Raw event data received:", event.data);  // 원시 이벤트 데이터를 로그로 확인
+      try {
+        const newNotification = JSON.parse(event.data);  // 이벤트 데이터를 JSON으로 파싱
+        console.log("Parsed notification:", newNotification);  // 파싱된 데이터 로그 확인
+        setNotifications((prevNotifications) => [...prevNotifications, newNotification]);
+      } catch (error) {
+        console.error("Failed to parse event data:", error);  // 파싱 오류 로그
+      }
+    };    
+  
+    eventSourceRef.current = eventSource;
+  }, []);
 
   useEffect(() => {
-    const fetchNotifications = async () => {
-      const accessToken = Cookies.get("access");
+    connectSSE();  // 컴포넌트가 마운트될 때 SSE 연결
 
-      if (!accessToken) return;
-
-      try {
-        const response = await fetch(`${process.env.REACT_APP_API_BASE_URL}/users/alarm`, {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-          },
-        });
-
-        if (response.status === 401) {
-          // Access Token 만료: 로그아웃 로직 추가
-          handleLogout();
-          return;
-        }
-
-        if (response.ok) {
-          const data = await response.json();
-          console.log(data); // 데이터 구조 확인
-          setNotifications(data);
-        } else {
-          console.error("Failed to fetch notifications");
-        }
-      } catch (error) {
-        console.error("Failed to fetch notifications", error);
+    return () => {
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();  // 컴포넌트가 언마운트될 때 SSE 연결 해제
+        eventSourceRef.current = null;  // 연결 해제 후 참조 제거
       }
     };
-
-    fetchNotifications();
-    const intervalId = setInterval(fetchNotifications, 5000); // 5초마다 폴링
-
-    return () => clearInterval(intervalId);
-  }, []);
+  }, [connectSSE]); // connectSSE를 의존성 배열에 추가하여 ESLint 경고 제거
 
   useEffect(() => {
     const handleClickOutside = (event) => {
