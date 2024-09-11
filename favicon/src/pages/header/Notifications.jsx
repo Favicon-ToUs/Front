@@ -32,13 +32,15 @@ const Notifications = () => {
   
     eventSource.onopen = () => {
       console.log("SSE connection established.");
+      console.log("Current EventSource:", eventSourceRef.current); // 이벤트 소스 상태 확인
     };
   
     let retryCount = 0;  // 재연결 시도 횟수 추적
   
     eventSource.onerror = (error) => {
       console.error("SSE connection error:", error);
-  
+      console.log("Current EventSource (onerror):", eventSourceRef.current); // 이벤트 소스 상태 확인
+
       if (eventSource.readyState === EventSource.CLOSED) {
         console.log("SSE connection was closed.");
       } else {
@@ -71,7 +73,8 @@ const Notifications = () => {
       } catch (error) {
         console.error("Failed to parse event data:", error);  // 파싱 오류 로그
       }
-    };    
+    };
+        
   
     eventSourceRef.current = eventSource;
   }, []);
