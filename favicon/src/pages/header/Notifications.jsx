@@ -13,13 +13,17 @@ const Notifications = () => {
   const connectSSE = useCallback(() => {
     const accessToken = Cookies.get("access");
   
-    if (!accessToken) return;
-  
-    if (eventSourceRef.current) {
-      console.log("SSE already connected.");
-      return; // 이미 연결된 경우 새로운 연결을 생성하지 않음
+    if (!accessToken) {
+      console.error("Access token is missing.");
+      return;
     }
-  
+
+    // 중복 연결 방지
+    if (eventSourceRef.current && eventSourceRef.current.readyState !== EventSource.CLOSED) {
+      console.log("SSE already connected.");
+      return;
+    }
+
     const eventSource = new EventSourcePolyfill(
       `${process.env.REACT_APP_API_BASE_URL}/users/alarm/subscribe`,
       {
@@ -29,42 +33,39 @@ const Notifications = () => {
         withCredentials: true, // 클라이언트가 자격 증명을 포함한 요청을 보내도록 설정
       }
     );
-  
+
     eventSource.onopen = () => {
       console.log("SSE connection established.");
-      console.log("Current EventSource:", eventSourceRef.current); // 이벤트 소스 상태 확인
     };
-  
+
     let retryCount = 0;  // 재연결 시도 횟수 추적
-  
+
     eventSource.onerror = (error) => {
       console.error("SSE connection error:", error);
-      console.log("Current EventSource (onerror):", eventSourceRef.current); // 이벤트 소스 상태 확인
 
+      // 연결이 닫힌 경우에만 재연결을 시도
       if (eventSource.readyState === EventSource.CLOSED) {
         console.log("SSE connection was closed.");
+
+        // 지수 백오프 알고리즘 사용하여 재연결 지연 시간 증가
+        const retryTimeout = Math.min(1000 * Math.pow(2, retryCount), 30000);  // 최대 30초
+        retryCount++;
+
+        setTimeout(() => {
+          console.log("Reconnecting SSE...");
+          connectSSE();  // 재연결 함수 호출
+        }, retryTimeout);  // 백오프 시간 후 재연결 시도
       } else {
         console.log("SSE connection error, readyState:", eventSource.readyState);
       }
-  
-      eventSource.close();  // 기존 연결 닫기
-  
-      // 지수 백오프 알고리즘 사용하여 재연결 지연 시간 증가
-      const retryTimeout = Math.min(1000 * Math.pow(2, retryCount), 30000);  // 최대 30초
-      retryCount++;
-  
-      setTimeout(() => {
-        console.log("Reconnecting SSE...");
-        connectSSE();  // 재연결 함수 호출
-      }, retryTimeout);  // 백오프 시간 후 재연결 시도
     };
-  
+
     eventSource.onmessage = (event) => {
       if (event.data === "keep-alive") {
         console.log("Heartbeat received.");
         return; // heartbeat 이벤트인 경우 처리하지 않음
       }
-    
+
       console.log("Raw event data received:", event.data);  // 원시 이벤트 데이터를 로그로 확인
       try {
         const newNotification = JSON.parse(event.data);  // 이벤트 데이터를 JSON으로 파싱
@@ -74,8 +75,7 @@ const Notifications = () => {
         console.error("Failed to parse event data:", error);  // 파싱 오류 로그
       }
     };
-        
-  
+
     eventSourceRef.current = eventSource;
   }, []);
 
