@@ -31,6 +31,7 @@ const Notifications = () => {
           Authorization: `Bearer ${accessToken}`,
         },
         withCredentials: true, // 클라이언트가 자격 증명을 포함한 요청을 보내도록 설정
+        heartbeatTimeout: 86400000,  // 24시간 동안 재연결 없이 유지
       }
     );
 

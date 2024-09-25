@@ -30,7 +30,7 @@ function useComments(postId) {
     } catch (error) {
       console.error('Failed to add comment:', error);
     }
-  };
+  };  
 
   return { comments, loading, addNewComment };
 }
